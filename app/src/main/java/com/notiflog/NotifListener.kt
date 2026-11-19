@@ -47,11 +47,14 @@ class NotifListener : NotificationListenerService() {
         }
         if (title.isEmpty() && text.isEmpty()) return
 
+        val app = appLabel(sbn.packageName)
+        if (Filters.shouldSkip(this, sbn.packageName, app, title, text)) return
+
         val db = LogDb.get(this)
         val added = db.insert(
             time = sbn.postTime,
             pkg = sbn.packageName,
-            app = appLabel(sbn.packageName),
+            app = app,
             title = title,
             text = text,
             key = sbn.key

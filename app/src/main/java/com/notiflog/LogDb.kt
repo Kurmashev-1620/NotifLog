@@ -90,6 +90,25 @@ class LogDb private constructor(ctx: Context) :
 
     fun count(): Long = DatabaseUtils.queryNumEntries(readableDatabase, "log")
 
+    fun deleteByPkg(pkg: String): Int = writableDatabase.delete("log", "pkg=?", arrayOf(pkg))
+
+    /** Удаляет уже сохранённые записи, которые теперь попадают под фильтры */
+    fun purge(ctx: Context): Int {
+        val ids = query("", Int.MAX_VALUE)
+            .filter { Filters.shouldSkip(ctx, it.pkg, it.app, it.title, it.text) }
+            .map { it.id }
+        if (ids.isEmpty()) return 0
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            ids.forEach { db.delete("log", "id=?", arrayOf(it.toString())) }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return ids.size
+    }
+
     fun clear() {
         writableDatabase.delete("log", null, null)
     }

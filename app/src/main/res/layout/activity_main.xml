@@ -32,11 +32,18 @@
         android:orientation="horizontal">
 
         <Button
+            android:id="@+id/btnFilters"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Фильтры" />
+
+        <Button
             android:id="@+id/btnExport"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Экспорт CSV" />
+            android:text="Экспорт" />
 
         <Button
             android:id="@+id/btnClear"

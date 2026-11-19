@@ -11,11 +11,23 @@ android {
         applicationId = "com.notiflog"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    signingConfigs {
+        create("fixed") {
+            storeFile = file("notiflog.keystore")
+            storePassword = "notiflog"
+            keyAlias = "notiflog"
+            keyPassword = "notiflog"
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig = signingConfigs.getByName("fixed")
+        }
         release {
             isMinifyEnabled = false
         }
