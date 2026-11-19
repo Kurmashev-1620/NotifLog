@@ -14,11 +14,18 @@ class NotifListener : NotificationListenerService() {
     private val labelCache = HashMap<String, String>()
 
     override fun onListenerConnected() {
+        // Держим процесс живым
+        KeepAliveService.start(this)
         // При подключении сохраняем уведомления, которые уже висят в шторке
         try {
             activeNotifications?.forEach { save(it) }
         } catch (_: Exception) {
         }
+    }
+
+    override fun onListenerDisconnected() {
+        // Система отключила службу — сразу просим подключить обратно
+        KeepAliveService.rebindListener(this)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {

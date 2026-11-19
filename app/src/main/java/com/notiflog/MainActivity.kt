@@ -135,6 +135,17 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         NotifListener.onNew = { handler.post { reload() } }
+        if (hasAccess()) {
+            // Разрешение показывать свой значок в шторке (Android 13+)
+            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 2)
+            }
+            KeepAliveService.start(this)
+            KeepAliveService.rebindListener(this)
+        }
         reload()
     }
 
