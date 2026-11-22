@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "NotifLog"
-include(":app")
+include(":app", ":finapp")

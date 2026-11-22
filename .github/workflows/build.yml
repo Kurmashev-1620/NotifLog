@@ -17,10 +17,21 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Build debug APK
-        run: chmod +x gradlew && ./gradlew assembleDebug
+      - name: Tests + build APKs
+        run: chmod +x gradlew && ./gradlew :finapp:testDebugUnitTest assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
           name: NotifLog-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Finance-apk
+          path: finapp/build/outputs/apk/debug/finapp-debug.apk
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-report
+          path: finapp/build/reports/tests/
