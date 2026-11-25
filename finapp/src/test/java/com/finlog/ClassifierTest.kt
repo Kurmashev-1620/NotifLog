@@ -109,6 +109,28 @@ class ClassifierTest {
         assertNull(Classifier.classify("com.bKash.customerapp", "bKash", "bKash", "Cash Out Tk 100 successful", trust = -1))
     }
 
+    private val DARAZ = "Thanks for shopping with us! Hi KOCMO, We received your #690120163272006 on 25 November 2026 " +
+        "and you'll be paying for this via Cash On Delivery. Package 1 Sold by: Digital Shadhu " +
+        "Vacuum Storage Bags for Clothes | Travel Storage Bags Tk. 230.00 Quantity: 1 " +
+        "Vacuum Storage Bags for Clothes | Travel Storage Bags Tk. 230.00 Quantity: 2 " +
+        "Subtotal: Tk. 690.00 Shipping fee: Tk. 181.00 Total Saving: Tk. (0.00) T"
+
+    @Test fun orderTruncatedUsesSubtotalPlusShipping() {
+        val p = Classifier.classify("ru.mail.mailapp", "Mail", "DARAZ Bangladesh", "Order Being Processed\n$DARAZ")!!
+        assertEquals(TxType.EXPENSE, p.type)
+        assertEquals(871.0, p.amount, 0.001)
+        assertFalse(p.confident) // посчитано — на проверку
+    }
+
+    @Test fun orderWithTotalUsesTotal() {
+        val p = Classifier.classify(
+            "ru.mail.mailapp", "Mail", "DARAZ Bangladesh",
+            DARAZ + "otal (inclusive of tax, if any): Tk. 896.00 Paid by: Cash On Delivery"
+        )!!
+        assertEquals(TxType.EXPENSE, p.type)
+        assertEquals(896.0, p.amount, 0.001)
+    }
+
     @Test fun numbers() {
         assertEquals(1250.0, Classifier.parseNum("1,250")!!, 0.001)
         assertEquals(12.5, Classifier.parseNum("12,5")!!, 0.001)

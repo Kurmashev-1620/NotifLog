@@ -55,6 +55,18 @@ object Classifier {
     private val BALANCE =
         Regex("(avl\\.? ?bal|available balance|balance|bal\\.|bal:|баланс|остаток|доступно)[^\\d]{0,20}$NUM")
 
+    // Подписи перед суммой (смотрим ~45 символов перед ней)
+    private val TOTAL_LABEL = Regex(
+        "(?<![a-z-])(grand total|order total|total amount|total payable|amount payable|amount paid|" +
+            "total|итого|всего|к оплате|сумма заказа)(\\s*\\([^)]*\\))?\\s*:?\\s*$"
+    )
+    private val SUBTOTAL_LABEL = Regex("(subtotal|sub total|sub-total|подытог)\\s*:?\\s*$")
+    private val FEE_LABEL = Regex(
+        "(shipping fee|shipping|delivery fee|delivery charge|delivery|service fee|platform fee|vat|tax|" +
+            "доставка|комиссия|сбор)\\s*:?\\s*$"
+    )
+    private val ORDER = Regex("\\b(order|ordered|subtotal|shipping fee|cash on delivery|checkout)\\b")
+
     private val MASK = Regex(
         "(\\*+\\d{2,4}|x{2,}\\d{2,4}|\\ba/c\\b|\\bacct\\b|\\baccount\\b|\\bcard\\b|сч[её]т|карт[аеыуо])"
     )
@@ -146,13 +158,31 @@ object Classifier {
         }
         hits.sortBy { it.start }
         val inBalance = { r: IntRange -> balRange != null && r.first >= balRange.first && r.last <= balRange.last }
-        val hit = hits.firstOrNull { !inBalance(it.numRange) }
+        val clean = hits.filter { !inBalance(it.numRange) }
+        val label = { h: Hit -> t.substring(maxOf(0, h.start - 45), h.start) }
 
-        val amount: Double
+        // В чеке/заказе несколько сумм (товары, доставка, итог) — берём ИТОГ.
+        // 1) есть «Total / Итого / К оплате» → берём его
+        // 2) нет итога (текст уведомления обрезан), но есть «Subtotal» → подытог + доставка/сборы
+        // 3) иначе — первая сумма
+        val total = clean.lastOrNull {
+            val l = label(it)
+            TOTAL_LABEL.containsMatchIn(l) && !SUBTOTAL_LABEL.containsMatchIn(l)
+        }
+        val subtotal = if (total == null) clean.firstOrNull { SUBTOTAL_LABEL.containsMatchIn(label(it)) } else null
+        val hit = total ?: subtotal ?: clean.firstOrNull()
+        var estimated = false
+
+        var amount: Double
         val currency: String
         if (hit != null) {
             amount = parseNum(hit.num) ?: return null
             currency = normCurrency(hit.cur)
+            if (subtotal != null) {
+                val fees = clean.filter { it.start > subtotal.start && FEE_LABEL.containsMatchIn(label(it)) }
+                amount += fees.sumOf { parseNum(it.num) ?: 0.0 }
+                estimated = true // итог посчитан, а не взят из текста — пусть пользователь проверит
+            }
         } else {
             val aw = AMOUNT_WORD.find(t) ?: return null   // суммы нет — не финансовое
             amount = parseNum(aw.groupValues.last()) ?: return null
@@ -163,7 +193,11 @@ object Classifier {
         // ---- Тип операции: какое слово встретилось раньше ----
         val expAt = firstIndex(t, EN_EXPENSE, RU_EXPENSE)
         val incAt = firstIndex(t, EN_INCOME, RU_INCOME)
+        val isOrder = ORDER.containsMatchIn(t) || t.contains("заказ")
+        val isRefund = t.contains("refund") || t.contains("возврат")
         val type = when {
+            // Заказ в магазине — это расход, даже если пишут «we received your order»
+            isOrder && !isRefund -> TxType.EXPENSE
             expAt < 0 && incAt < 0 -> TxType.UNKNOWN
             incAt < 0 -> TxType.EXPENSE
             expAt < 0 -> TxType.INCOME
@@ -186,6 +220,7 @@ object Classifier {
         if (EN_DUE.containsMatchIn(t) || RU_DUE.any { t.contains(it) }) score -= 3
         if (CODE_WORDS.containsMatchIn(t) && CODE_DIGITS.containsMatchIn(t)) score -= 5
         if (trust > 0) score += 3
+        if (estimated) score -= 3 // посчитанный итог — всегда на проверку
         if (score <= 0) return null
 
         return Parsed(amount, currency, type, balance, merchant(orig, type, title, app), score)
