@@ -4,6 +4,8 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -66,6 +68,8 @@ fun AppRoot() {
 
     Scaffold(
         containerColor = C.Bg,
+        // Отступ под статус-бар каждый экран делает сам — иначе он удваивается
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBar) NavigationBar(containerColor = C.Card) {
                 TABS.forEach { t ->
@@ -97,7 +101,12 @@ fun AppRoot() {
             }
         }
     ) { pad ->
-        NavHost(nav, startDestination = "home", modifier = Modifier.padding(pad)) {
+        NavHost(
+            nav, startDestination = "home", modifier = Modifier.padding(pad).background(C.Bg),
+            // Без затухания — чтобы предыдущий экран не просвечивал
+            enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None },
+            popEnterTransition = { EnterTransition.None }, popExitTransition = { ExitTransition.None }
+        ) {
             composable("home") { HomeScreen(onAdd = { type -> nav.navigate("add/$type") }) }
             composable("ops") { OperationsScreen(onEdit = { id -> nav.navigate("edit/$id") }) }
             composable("scan") { ScanScreen() }

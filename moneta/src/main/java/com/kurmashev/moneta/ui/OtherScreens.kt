@@ -241,7 +241,7 @@ fun MoreScreen() {
             MoreRow(Icons.Filled.FileDownload, "Экспорт", "CSV / Excel — шаг 1.6")
             MoreRow(Icons.Filled.CloudSync, "Google Таблица и резервная копия", "этап 2")
             MoreRow(Icons.Filled.NotificationsActive, "Пуш-уведомления банков", "этап 3")
-            MoreRow(Icons.Filled.Info, "О приложении", "Moneta 0.1")
+            MoreRow(Icons.Filled.Info, "О приложении", "Moneta 0.1.1")
         }
     }
 }
