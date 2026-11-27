@@ -12,8 +12,8 @@ android {
         applicationId = "com.kurmashev.moneta"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.2"
+        versionCode = 4
+        versionName = "0.3"
     }
 
     signingConfigs {
@@ -50,6 +50,9 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.navigation:navigation-compose:2.7.7")
     implementation("androidx.core:core-ktx:1.13.1")
+
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
 
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")

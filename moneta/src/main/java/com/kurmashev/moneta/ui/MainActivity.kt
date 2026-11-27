@@ -34,9 +34,22 @@ import com.kurmashev.moneta.data.CURRENCIES
 import com.kurmashev.moneta.data.PeriodType
 import com.kurmashev.moneta.data.Rates
 import com.kurmashev.moneta.data.Seed
+import com.kurmashev.moneta.google.SyncWorker
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
+    // Синхронизация с Google при открытии и при сворачивании приложения
+    override fun onStart() {
+        super.onStart()
+        SyncWorker.soon(this, 2)
+        SyncWorker.periodic(this)
+    }
+
+    override fun onStop() {
+        super.onStop()
+        SyncWorker.soon(this, 3)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -136,10 +149,11 @@ fun AppRoot() {
                 )
             }
             composable("import") { ImportScreen(onBack = { nav.popBackStack() }) }
+            composable("google") { GoogleScreen(onBack = { nav.popBackStack() }) }
             composable("ops") { OperationsScreen(onEdit = { id -> nav.navigate("edit/$id") }) }
             composable("scan") { ScanScreen() }
             composable("accounts") { AccountsScreen() }
-            composable("more") { MoreScreen(onImport = { nav.navigate("import") }) }
+            composable("more") { MoreScreen(onImport = { nav.navigate("import") }, onGoogle = { nav.navigate("google") }) }
             composable("add/{type}", arguments = listOf(navArgument("type") { type = NavType.StringType })) {
                 AddScreen(initialType = it.arguments?.getString("type") ?: "EXPENSE", editId = null, onDone = { nav.popBackStack() })
             }

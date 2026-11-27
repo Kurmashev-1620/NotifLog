@@ -210,7 +210,7 @@ fun ScanScreen() {
 // ======================= Ещё / настройки =======================
 
 @Composable
-fun MoreScreen(onImport: () -> Unit) {
+fun MoreScreen(onImport: () -> Unit, onGoogle: () -> Unit) {
     var base by remember { mutableStateOf(MonetaApp.instance.prefs.baseCurrency) }
     var pick by remember { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<String?>(null) }
@@ -223,9 +223,12 @@ fun MoreScreen(onImport: () -> Unit) {
             MoreRow(Icons.Filled.FileUpload, "Импорт из другого приложения", "xlsx: расходы, доходы, переводы", onImport)
             MoreRow(Icons.Filled.Category, "Категории", "редактор — следующий шаг") {}
             MoreRow(Icons.Filled.FileDownload, "Экспорт", "CSV / Excel — шаг 1.6") {}
-            MoreRow(Icons.Filled.CloudSync, "Google Таблица и резервная копия", "этап 2") {}
+            val p = MonetaApp.instance.prefs
+            MoreRow(Icons.Filled.CloudSync, "Google Таблица и резервная копия",
+                when { !p.googleOn -> "не подключено"; p.needSignIn -> "нужно войти заново"; else -> p.googleEmail.ifEmpty { "подключено" } },
+                onGoogle)
             MoreRow(Icons.Filled.NotificationsActive, "Пуш-уведомления банков", "этап 3") {}
-            MoreRow(Icons.Filled.Info, "О приложении", "Moneta 0.2") {}
+            MoreRow(Icons.Filled.Info, "О приложении", "Moneta 0.3") {}
         }
     }
     if (pick) AlertDialog(

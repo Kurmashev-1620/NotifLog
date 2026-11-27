@@ -28,6 +28,26 @@ class Prefs(ctx: Context) {
         get() = p.getString("base", "") ?: ""
         set(v) = p.edit().putString("base", v).apply()
 
+    // ---- Google ----
+    var googleOn: Boolean
+        get() = p.getBoolean("googleOn", false)
+        set(v) = p.edit().putBoolean("googleOn", v).apply()
+    var googleEmail: String
+        get() = p.getString("googleEmail", "") ?: ""
+        set(v) = p.edit().putString("googleEmail", v).apply()
+    var sheetId: String
+        get() = p.getString("sheetId", "") ?: ""
+        set(v) = p.edit().putString("sheetId", v).apply()
+    var sheetUrl: String
+        get() = p.getString("sheetUrl", "") ?: ""
+        set(v) = p.edit().putString("sheetUrl", v).apply()
+    var lastSync: Long
+        get() = p.getLong("lastSync", 0)
+        set(v) = p.edit().putLong("lastSync", v).apply()
+    var needSignIn: Boolean
+        get() = p.getBoolean("needSignIn", false)
+        set(v) = p.edit().putBoolean("needSignIn", v).apply()
+
     /** Последний выбранный счёт для новой операции */
     var lastAccountId: String
         get() = p.getString("lastAccount", "") ?: ""
