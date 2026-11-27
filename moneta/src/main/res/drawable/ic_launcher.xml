@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Своя иконка Moneta: изумрудный круг, золотое кольцо-диаграмма и буква M -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path android:fillColor="#2C4A3F" android:pathData="M24,0A24,24 0,1 1,23.99,0Z" />
+    <!-- кольцо: золотой сегмент -->
+    <path
+        android:strokeColor="#F2C14E" android:strokeWidth="4" android:fillColor="#00000000"
+        android:pathData="M24,8A16,16 0,1 1,8.8,29" />
+    <!-- кольцо: мятный сегмент -->
+    <path
+        android:strokeColor="#5CC8A0" android:strokeWidth="4" android:fillColor="#00000000"
+        android:pathData="M8.2,26A16,16 0,0 1,22,8.1" />
+    <!-- буква M -->
+    <path
+        android:fillColor="#EDEFE9"
+        android:pathData="M16.5,30.5V17.5h3l4.5,6 4.5,-6h3v13h-3v-8.2l-4.5,6 -4.5,-6v8.2z" />
+</vector>

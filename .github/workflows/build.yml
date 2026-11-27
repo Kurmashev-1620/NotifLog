@@ -18,7 +18,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Tests + build APKs
-        run: chmod +x gradlew && ./gradlew :finapp:testDebugUnitTest assembleDebug
+        run: chmod +x gradlew && ./gradlew :finapp:testDebugUnitTest :moneta:testDebugUnitTest assembleDebug
 
       - uses: actions/upload-artifact@v4
         with:
@@ -31,7 +31,14 @@ jobs:
           path: finapp/build/outputs/apk/debug/finapp-debug.apk
 
       - uses: actions/upload-artifact@v4
+        with:
+          name: Moneta-apk
+          path: moneta/build/outputs/apk/debug/moneta-debug.apk
+
+      - uses: actions/upload-artifact@v4
         if: failure()
         with:
           name: test-report
-          path: finapp/build/reports/tests/
+          path: |
+            finapp/build/reports/tests/
+            moneta/build/reports/tests/
