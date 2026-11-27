@@ -17,7 +17,7 @@ class GoogleTest {
         val c = Calendar.getInstance(tz).apply { clear(); set(2026, Calendar.NOVEMBER, 18, 14, 30) }
         val s = SheetRows.msToSerial(c.timeInMillis, tz)
         assertEquals(46344.604167, s, 0.000001) // 18.11.2026 14:30
-        assertEquals(c.timeInMillis, SheetRows.serialToMs(s, tz), 1000)
+        assertEquals(c.timeInMillis.toDouble(), SheetRows.serialToMs(s, tz).toDouble(), 1000.0)
     }
 
     @Test fun normalizationMatchesSheetsReadBack() {
