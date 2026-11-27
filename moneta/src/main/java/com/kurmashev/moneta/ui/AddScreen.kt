@@ -50,6 +50,7 @@ fun AddScreen(initialType: String, editId: String?, onDone: () -> Unit) {
     var date by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var comment by remember { mutableStateOf("") }
     var rateText by remember { mutableStateOf("") }
+    var rateEdited by remember { mutableStateOf(false) }  // курс введён вручную — не подставлять автоматически
     var editing by remember { mutableStateOf<OperationEntity?>(null) }
     var accMenu by remember { mutableStateOf(false) }
 
@@ -59,7 +60,8 @@ fun AddScreen(initialType: String, editId: String?, onDone: () -> Unit) {
             dao.allOperations().first().firstOrNull { it.id == editId }?.let { o ->
                 editing = o; type = o.type; categoryId = o.categoryId; accountId = o.accountId
                 expr = money(o.amount).replace(" ", ""); date = o.date; comment = o.comment
-                if (o.rate != 1.0) rateText = o.rate.toString()
+                if (o.currency != base) rateText = Rates.format(o.rate)
+                rateEdited = o.rateManual
             }
         }
     }
@@ -69,6 +71,14 @@ fun AddScreen(initialType: String, editId: String?, onDone: () -> Unit) {
     val needRate = accCur != base
     val typeCats = cats.filter { it.type == type && it.parentId == null }
 
+    // Курс на день операции подставляется сам (если не введён вручную)
+    LaunchedEffect(accCur, date, editing) {
+        if (needRate && !rateEdited && (editId == null || editing != null)) {
+            val r = Rates.rate(dao, date, accCur, base)
+            if (r != null && !rateEdited) rateText = Rates.format(r)
+        }
+    }
+
     fun save() {
         val amount = evalExpr(expr)
         when {
@@ -76,14 +86,17 @@ fun AddScreen(initialType: String, editId: String?, onDone: () -> Unit) {
             categoryId == null -> { Toast.makeText(ctx, "Выберите категорию", Toast.LENGTH_SHORT).show(); return }
             account == null -> { Toast.makeText(ctx, "Нет счёта", Toast.LENGTH_SHORT).show(); return }
         }
-        val rate = if (needRate) (rateText.replace(',', '.').toDoubleOrNull() ?: 1.0) else 1.0
+        val rate = if (needRate) {
+            rateText.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0 }
+                ?: run { Toast.makeText(ctx, "Нет курса — впишите его вручную", Toast.LENGTH_SHORT).show(); return }
+        } else 1.0
         val op = (editing ?: OperationEntity(
             type = type, amount = 0.0, currency = accCur, amountBase = 0.0,
             accountId = account!!.id, categoryId = categoryId!!, date = date
         )).copy(
             type = type, amount = amount!!, currency = accCur, amountBase = amount * rate, rate = rate,
             accountId = account!!.id, categoryId = categoryId!!, date = date, comment = comment.trim(),
-            updatedAt = System.currentTimeMillis()
+            rateManual = needRate && rateEdited, updatedAt = System.currentTimeMillis()
         )
         scope.launch {
             dao.upsertOperation(op)
@@ -159,7 +172,7 @@ fun AddScreen(initialType: String, editId: String?, onDone: () -> Unit) {
                 val rate = rateText.replace(',', '.').toDoubleOrNull()
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Курс 1 ${symbol(accCur)} =", color = C.Dim, fontSize = 13.sp)
-                    BasicField(rateText, { rateText = it }, "курс", Modifier.width(90.dp))
+                    BasicField(rateText, { rateText = it; rateEdited = true }, "курс", Modifier.width(110.dp))
                     Text(symbol(base) + if (a != null && rate != null) "  → ${money(a * rate, base)}" else "",
                         color = C.Dim, fontSize = 13.sp)
                 }

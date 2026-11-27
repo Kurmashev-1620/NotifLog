@@ -22,8 +22,17 @@ val CURRENCIES = listOf(
     Currency("TRY", "₺", "Турецкая лира"),
     Currency("THB", "฿", "Тайский бат"),
     Currency("AED", "د.إ", "Дирхам ОАЭ"),
-    Currency("CNY", "¥", "Китайский юань"),
-    Currency("INR", "₹", "Индийская рупия")
+    Currency("VND", "₫", "Вьетнамский донг"),
+    Currency("JPY", "¥", "Японская иена"),
+    Currency("CNY", "元", "Китайский юань"),
+    Currency("KRW", "₩", "Южнокорейская вона"),
+    Currency("INR", "₹", "Индийская рупия"),
+    Currency("GBP", "£", "Фунт стерлингов"),
+    Currency("GEL", "₾", "Грузинский лари"),
+    Currency("AMD", "֏", "Армянский драм"),
+    Currency("AZN", "₼", "Азербайджанский манат"),
+    Currency("MYR", "RM", "Малайзийский ринггит"),
+    Currency("IDR", "Rp", "Индонезийская рупия")
 )
 
 fun symbol(code: String) = CURRENCIES.firstOrNull { it.code == code }?.symbol ?: code

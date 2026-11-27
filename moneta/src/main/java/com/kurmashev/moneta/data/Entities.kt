@@ -1,5 +1,6 @@
 package com.kurmashev.moneta.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -69,7 +70,10 @@ data class OperationEntity(
     val source: String = Source.MANUAL,
     val receiptId: String? = null,
     val updatedAt: Long = System.currentTimeMillis(),
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val rateManual: Boolean = false,  // курс введён вручную или взят из импорта — не перезаписывать
+    val importKey: String? = null     // ключ строки из импорта — чтобы не добавить её второй раз
 )
 
 @Entity(tableName = "transfers", indices = [Index("date")])
@@ -82,5 +86,14 @@ data class TransferEntity(
     val date: Long,
     val comment: String = "",
     val updatedAt: Long = System.currentTimeMillis(),
-    val deleted: Boolean = false
+    val deleted: Boolean = false,
+    val importKey: String? = null
+)
+
+/** Курс валюты на день: сколько единиц валюты за 1 USD */
+@Entity(tableName = "rates", primaryKeys = ["date", "currency"])
+data class RateEntity(
+    val date: String,     // yyyy-MM-dd
+    val currency: String,
+    val perUsd: Double
 )

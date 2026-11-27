@@ -3,9 +3,11 @@ package com.kurmashev.moneta.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,29 +35,49 @@ import com.kurmashev.moneta.data.*
 
 data class CatSlice(val category: CategoryEntity, val sum: Double, val share: Double)
 
+/** «Итого» по видимым счетам в основной валюте (по последним курсам) */
 @Composable
-fun HomeScreen(onAdd: (String) -> Unit) {
+fun rememberTotal(): Pair<Double, List<String>> {
+    val dao = MonetaApp.dao
+    val base = MonetaApp.instance.prefs.baseCurrency
+    val accounts by remember { dao.accounts() }.collectAsState(emptyList())
+    val ops by remember { dao.allOperations() }.collectAsState(emptyList())
+    val transfers by remember { dao.transfers() }.collectAsState(emptyList())
+    val rates by remember { dao.latestRates() }.collectAsState(emptyList())
+    val bal = balances(accounts, ops, transfers)
+    var total = 0.0
+    val missing = ArrayList<String>()
+    accounts.filter { !it.hidden }.forEach { a ->
+        val b = bal[a.id] ?: 0.0
+        val v = Rates.convertLatest(rates, b, a.currency, base)
+        if (v != null) total += v else if (b != 0.0) missing.add(a.currency)
+    }
+    return total to missing.distinct()
+}
+
+@Composable
+fun HomeScreen(onAdd: (String) -> Unit, onCategory: (String, PeriodType, Int, String?) -> Unit) {
     val dao = MonetaApp.dao
     val base = MonetaApp.instance.prefs.baseCurrency
 
     var expense by rememberSaveable { mutableStateOf(true) }
     var ptype by rememberSaveable { mutableStateOf(PeriodType.MONTH) }
     var offset by rememberSaveable { mutableIntStateOf(0) }
+    var curFilter by rememberSaveable { mutableStateOf<String?>(null) }
     val r = remember(ptype, offset) { range(ptype, offset) }
 
     val periodOps by remember(r) { dao.operations(r.from, r.to) }.collectAsState(emptyList())
-    val allOps by remember { dao.allOperations() }.collectAsState(emptyList())
-    val accounts by remember { dao.accounts() }.collectAsState(emptyList())
-    val transfers by remember { dao.transfers() }.collectAsState(emptyList())
     val cats by remember { dao.categories() }.collectAsState(emptyList())
-
-    // Итого по всем счетам (пока счета в других валютах считаются по курсу 1 — курсы будут в шаге 1.4)
-    val bal = balances(accounts, allOps, transfers)
-    val total = accounts.filter { !it.hidden }.sumOf { bal[it.id] ?: 0.0 }
+    val (total, missing) = rememberTotal()
 
     val type = if (expense) OpType.EXPENSE else OpType.INCOME
-    val byCat = periodOps.filter { it.type == type }.groupBy { it.categoryId }
-        .mapValues { e -> e.value.sumOf { it.amountBase } }
+    val typeOps = periodOps.filter { it.type == type }
+    val present = typeOps.map { it.currency }.distinct().sortedBy { if (it == base) "" else it }
+    val filter = curFilter?.takeIf { it in present }
+    val shown = if (filter == null) typeOps else typeOps.filter { it.currency == filter }
+    val shownCur = filter ?: base
+    val byCat = shown.groupBy { it.categoryId }
+        .mapValues { e -> e.value.sumOf { if (filter == null) it.amountBase else it.amount } }
     val periodSum = byCat.values.sum()
     val slices = byCat.mapNotNull { (id, s) ->
         cats.firstOrNull { it.id == id }?.let { CatSlice(it, s, if (periodSum > 0) s / periodSum else 0.0) }
@@ -62,7 +85,6 @@ fun HomeScreen(onAdd: (String) -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-            // ---- Шапка ----
             item {
                 Column(
                     Modifier.fillMaxWidth()
@@ -74,6 +96,7 @@ fun HomeScreen(onAdd: (String) -> Unit) {
                 ) {
                     Text("Итого", color = C.Text.copy(alpha = 0.85f), fontSize = 16.sp)
                     Text(money(total, base), color = C.Text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
+                    if (missing.isNotEmpty()) Text("нет курса: ${missing.joinToString()}", color = C.Dim, fontSize = 12.sp)
                     Spacer(Modifier.height(10.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         HeaderTab("РАСХОДЫ", expense) { expense = true }
@@ -81,44 +104,29 @@ fun HomeScreen(onAdd: (String) -> Unit) {
                     }
                 }
             }
-            // ---- Карточка с периодом и диаграммой ----
             item {
                 Column(
                     Modifier.padding(horizontal = 14.dp).offset(y = (-36).dp)
                         .clip(RoundedCornerShape(24.dp)).background(C.Card).padding(vertical = 14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        PeriodType.values().forEach { p ->
-                            val sel = p == ptype
-                            Column(horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier.clickable { ptype = p; offset = 0 }.padding(6.dp)) {
-                                Text(p.label, color = if (sel) C.Mint else C.Dim, fontSize = 15.sp,
-                                    fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
-                                Spacer(Modifier.height(4.dp))
-                                Box(Modifier.width(40.dp).height(3.dp).clip(CircleShape)
-                                    .background(if (sel) C.Mint else Color.Transparent))
-                            }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        IconButton({ offset-- }) { Icon(Icons.Filled.ChevronLeft, "Назад", tint = C.Dim) }
-                        Text(r.label, color = C.Text, fontSize = 16.sp, modifier = Modifier.weight(1f),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        IconButton({ if (offset < 0) offset++ }, enabled = offset < 0) {
-                            Icon(Icons.Filled.ChevronRight, "Вперёд", tint = if (offset < 0) C.Dim else Color.Transparent)
-                        }
+                    PeriodTabs(ptype) { ptype = it; offset = 0 }
+                    PeriodArrows(r.label, offset) { offset = it }
+                    if (present.size > 1 || present.any { it != base }) {
+                        CurrencyChips(present, filter, base, Modifier.padding(horizontal = 12.dp)) { curFilter = it }
                     }
                     Spacer(Modifier.height(6.dp))
                     Donut(slices, Modifier.size(220.dp)) {
-                        Text(moneyShort(periodSum, base), color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                        Text(moneyShort(periodSum, shownCur), color = C.Text, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         if (slices.isEmpty()) Text("нет операций", color = C.Dim, fontSize = 12.sp)
+                        else if (filter != null) Text("только ${symbol(filter)}", color = C.Dim, fontSize = 12.sp)
                     }
                 }
             }
-            // ---- Категории ----
             items(slices, key = { it.category.id }) { s ->
-                CategoryRow(s, base, Modifier.offset(y = (-24).dp))
+                CategoryRow(s, shownCur, Modifier.offset(y = (-24).dp)) {
+                    onCategory(s.category.id, ptype, offset, filter)
+                }
             }
         }
         FloatingActionButton(
@@ -127,6 +135,53 @@ fun HomeScreen(onAdd: (String) -> Unit) {
             modifier = Modifier.align(Alignment.BottomEnd).padding(20.dp).size(64.dp)
         ) { Icon(Icons.Filled.Add, "Добавить", Modifier.size(32.dp)) }
     }
+}
+
+@Composable
+fun PeriodTabs(selected: PeriodType, onSelect: (PeriodType) -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+        PeriodType.values().forEach { p ->
+            val sel = p == selected
+            Column(horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.clickable { onSelect(p) }.padding(6.dp)) {
+                Text(p.label, color = if (sel) C.Mint else C.Dim, fontSize = 15.sp,
+                    fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal)
+                Spacer(Modifier.height(4.dp))
+                Box(Modifier.width(40.dp).height(3.dp).clip(CircleShape)
+                    .background(if (sel) C.Mint else Color.Transparent))
+            }
+        }
+    }
+}
+
+@Composable
+fun PeriodArrows(label: String, offset: Int, onOffset: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        IconButton({ onOffset(offset - 1) }) { Icon(Icons.Filled.ChevronLeft, "Назад", tint = C.Dim) }
+        Text(label, color = C.Text, fontSize = 16.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+        IconButton({ if (offset < 0) onOffset(offset + 1) }, enabled = offset < 0) {
+            Icon(Icons.Filled.ChevronRight, "Вперёд", tint = if (offset < 0) C.Dim else Color.Transparent)
+        }
+    }
+}
+
+/** Фильтр по валютам: «Все в ₸» или только одна валюта */
+@Composable
+fun CurrencyChips(present: List<String>, selected: String?, base: String, modifier: Modifier = Modifier, onSelect: (String?) -> Unit) {
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Chip("Все в ${symbol(base)}", selected == null) { onSelect(null) }
+        present.forEach { c -> Chip("${symbol(c)} $c", selected == c) { onSelect(c) } }
+    }
+}
+
+@Composable
+fun Chip(text: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        text, color = if (selected) Color(0xFF1B1B1B) else C.Text, fontSize = 13.sp,
+        fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (selected) C.Gold else C.CardHi)
+            .clickable(onClick = onClick).padding(horizontal = 12.dp, vertical = 6.dp)
+    )
 }
 
 @Composable
@@ -170,10 +225,10 @@ fun CatIcon(key: String, color: Long, size: Int = 44) {
 }
 
 @Composable
-private fun CategoryRow(s: CatSlice, base: String, modifier: Modifier) {
+private fun CategoryRow(s: CatSlice, cur: String, modifier: Modifier, onClick: () -> Unit) {
     Row(
         modifier.padding(horizontal = 14.dp, vertical = 4.dp).fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp)).background(C.Card).padding(12.dp),
+            .clip(RoundedCornerShape(18.dp)).background(C.Card).clickable(onClick = onClick).padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         CatIcon(s.category.icon, s.category.color)
@@ -182,6 +237,33 @@ private fun CategoryRow(s: CatSlice, base: String, modifier: Modifier) {
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text("${Math.round(s.share * 100)}%", color = C.Dim, fontSize = 15.sp)
         Spacer(Modifier.width(10.dp))
-        Text(money(s.sum, base), color = C.Text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        Text(money(s.sum, cur), color = C.Text, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/** Строка операции: сумма в валюте покупки + «≈» в основной, если валюта другая */
+@Composable
+fun OpRow(o: OperationEntity, c: CategoryEntity?, subtitle: String, onClick: () -> Unit) {
+    val base = MonetaApp.instance.prefs.baseCurrency
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(16.dp))
+            .background(C.Card).clickable(onClick = onClick).padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CatIcon(c?.icon ?: "other", c?.color ?: 0xFF9AA5A0, 40)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(c?.name ?: "Без категории", color = C.Text, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitle.isNotBlank())
+                Text(subtitle, color = C.Dim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            val inc = o.type == OpType.INCOME
+            Text(
+                (if (inc) "+" else "−") + money(o.amount, o.currency),
+                color = if (inc) C.Income else C.Text, fontSize = 16.sp, fontWeight = FontWeight.Medium
+            )
+            if (o.currency != base) Text("≈ ${money(o.amountBase, base)}", color = C.Dim, fontSize = 12.sp)
+        }
     }
 }

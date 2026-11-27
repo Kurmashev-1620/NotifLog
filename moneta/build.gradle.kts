@@ -12,8 +12,8 @@ android {
         applicationId = "com.kurmashev.moneta"
         minSdk = 26
         targetSdk = 34
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.2"
     }
 
     signingConfigs {
@@ -56,4 +56,5 @@ dependencies {
     ksp("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20231013")
 }

@@ -64,28 +64,8 @@ fun OperationsScreen(onEdit: (String) -> Unit) {
                     }
                 }
                 items(list, key = { it.id }) { o ->
-                    val c = catMap[o.categoryId]
-                    val a = accMap[o.accountId]
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 3.dp).clip(RoundedCornerShape(16.dp))
-                            .background(C.Card).clickable { onEdit(o.id) }.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CatIcon(c?.icon ?: "other", c?.color ?: 0xFF9AA5A0, 40)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(c?.name ?: "Без категории", color = C.Text, fontSize = 16.sp)
-                            Text(
-                                listOfNotNull(a?.name, o.comment.ifBlank { null }).joinToString(" · "),
-                                color = C.Dim, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        val inc = o.type == OpType.INCOME
-                        Text(
-                            (if (inc) "+" else "−") + money(o.amount, o.currency),
-                            color = if (inc) C.Income else C.Text, fontSize = 16.sp, fontWeight = FontWeight.Medium
-                        )
-                    }
+                    val sub = listOfNotNull(accMap[o.accountId]?.name, o.comment.ifBlank { null }).joinToString(" · ")
+                    OpRow(o, catMap[o.categoryId], sub) { onEdit(o.id) }
                 }
             }
         }
@@ -102,6 +82,7 @@ fun AccountsScreen() {
     val ops by remember { dao.allOperations() }.collectAsState(emptyList())
     val transfers by remember { dao.transfers() }.collectAsState(emptyList())
     val bal = balances(accounts, ops, transfers)
+    val total = rememberTotal()
     var dialog by remember { mutableStateOf<AccountEntity?>(null) }
     var newAcc by remember { mutableStateOf(false) }
 
@@ -114,9 +95,8 @@ fun AccountsScreen() {
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text("Счета · итого", color = C.Text.copy(alpha = 0.85f))
-                    Text(money(accounts.filter { !it.hidden }.sumOf { bal[it.id] ?: 0.0 }, base),
-                        color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold)
-                    Text("переводы и курсы валют — в следующем шаге", color = C.Dim, fontSize = 12.sp)
+                    Text(money(total.first, base), color = C.Text, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    Text("в ${symbol(base)} по сегодняшнему курсу", color = C.Dim, fontSize = 12.sp)
                 }
             }
             items(accounts, key = { it.id }) { a ->
@@ -230,26 +210,75 @@ fun ScanScreen() {
 // ======================= Ещё / настройки =======================
 
 @Composable
-fun MoreScreen() {
-    val base = MonetaApp.instance.prefs.baseCurrency
+fun MoreScreen(onImport: () -> Unit) {
+    var base by remember { mutableStateOf(MonetaApp.instance.prefs.baseCurrency) }
+    var pick by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<String?>(null) }
+    var progress by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     Column(Modifier.fillMaxSize()) {
         ScreenTitle("Ещё")
         Column(Modifier.padding(12.dp)) {
-            MoreRow(Icons.Filled.Category, "Категории", "редактор — шаг 1.3b")
-            MoreRow(Icons.Filled.CurrencyExchange, "Основная валюта", "$base ${symbol(base)}")
-            MoreRow(Icons.Filled.FileUpload, "Импорт из другого приложения", "xlsx — шаг 1.5")
-            MoreRow(Icons.Filled.FileDownload, "Экспорт", "CSV / Excel — шаг 1.6")
-            MoreRow(Icons.Filled.CloudSync, "Google Таблица и резервная копия", "этап 2")
-            MoreRow(Icons.Filled.NotificationsActive, "Пуш-уведомления банков", "этап 3")
-            MoreRow(Icons.Filled.Info, "О приложении", "Moneta 0.1.1")
+            MoreRow(Icons.Filled.CurrencyExchange, "Основная валюта", "$base ${symbol(base)} — нажмите, чтобы сменить") { pick = true }
+            MoreRow(Icons.Filled.FileUpload, "Импорт из другого приложения", "xlsx: расходы, доходы, переводы", onImport)
+            MoreRow(Icons.Filled.Category, "Категории", "редактор — следующий шаг") {}
+            MoreRow(Icons.Filled.FileDownload, "Экспорт", "CSV / Excel — шаг 1.6") {}
+            MoreRow(Icons.Filled.CloudSync, "Google Таблица и резервная копия", "этап 2") {}
+            MoreRow(Icons.Filled.NotificationsActive, "Пуш-уведомления банков", "этап 3") {}
+            MoreRow(Icons.Filled.Info, "О приложении", "Moneta 0.2") {}
         }
+    }
+    if (pick) AlertDialog(
+        onDismissRequest = { pick = false }, containerColor = C.Card,
+        title = { Text("Основная валюта", color = C.Text) },
+        text = {
+            LazyColumn(Modifier.heightIn(max = 420.dp)) {
+                items(CURRENCIES) { c ->
+                    Text("${c.symbol}  ${c.code} · ${c.name}", color = if (c.code == base) C.Gold else C.Text,
+                        modifier = Modifier.fillMaxWidth().clickable { pick = false; if (c.code != base) confirm = c.code }.padding(12.dp))
+                }
+            }
+        },
+        confirmButton = { TextButton({ pick = false }) { Text("Закрыть", color = C.Dim) } }
+    )
+    confirm?.let { nw ->
+        AlertDialog(
+            onDismissRequest = { confirm = null }, containerColor = C.Card,
+            title = { Text("Сменить на $nw ${symbol(nw)}?", color = C.Text) },
+            text = {
+                Text("Итоги и диаграммы будут считаться в новой валюте. Все операции пересчитаются по курсу " +
+                    "на день каждой операции (нужен интернет). Суммы в валюте покупки не изменятся.", color = C.Dim)
+            },
+            confirmButton = {
+                TextButton({
+                    val old = base
+                    confirm = null
+                    progress = "Пересчёт…"
+                    scope.launch {
+                        BaseCurrency.change(MonetaApp.dao, old, nw) { i, n -> progress = "Пересчёт: $i из $n" }
+                        MonetaApp.instance.prefs.baseCurrency = nw
+                        base = nw
+                        progress = null
+                    }
+                }) { Text("Пересчитать", color = C.Gold) }
+            },
+            dismissButton = { TextButton({ confirm = null }) { Text("Отмена", color = C.Dim) } }
+        )
+    }
+    progress?.let { p ->
+        AlertDialog(onDismissRequest = {}, containerColor = C.Card, confirmButton = {},
+            title = { Text("Подождите", color = C.Text) },
+            text = { Row(verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(color = C.Gold, modifier = Modifier.size(28.dp)); Spacer(Modifier.width(14.dp)); Text(p, color = C.Text)
+            } })
     }
 }
 
 @Composable
-private fun MoreRow(ic: ImageVector, title: String, sub: String) {
+private fun MoreRow(ic: ImageVector, title: String, sub: String, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(16.dp)).background(C.Card).padding(14.dp),
+        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(16.dp)).background(C.Card)
+            .clickable(onClick = onClick).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(ic, null, tint = C.Mint)

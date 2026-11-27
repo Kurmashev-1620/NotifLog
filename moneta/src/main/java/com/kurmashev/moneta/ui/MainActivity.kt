@@ -31,6 +31,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kurmashev.moneta.MonetaApp
 import com.kurmashev.moneta.data.CURRENCIES
+import com.kurmashev.moneta.data.PeriodType
+import com.kurmashev.moneta.data.Rates
 import com.kurmashev.moneta.data.Seed
 import kotlinx.coroutines.launch
 
@@ -65,6 +67,9 @@ fun AppRoot() {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route ?: "home"
     val showBar = TABS.any { it.route == route }
+
+    // Раз в день подтягиваем свежие курсы валют
+    LaunchedEffect(Unit) { try { Rates.refreshToday(MonetaApp.dao) } catch (_: Exception) {} }
 
     Scaffold(
         containerColor = C.Bg,
@@ -107,11 +112,34 @@ fun AppRoot() {
             enterTransition = { EnterTransition.None }, exitTransition = { ExitTransition.None },
             popEnterTransition = { EnterTransition.None }, popExitTransition = { ExitTransition.None }
         ) {
-            composable("home") { HomeScreen(onAdd = { type -> nav.navigate("add/$type") }) }
+            composable("home") {
+                HomeScreen(
+                    onAdd = { type -> nav.navigate("add/$type") },
+                    onCategory = { id, p, off, cur -> nav.navigate("cat/$id/${p.name}/$off/${cur ?: "ALL"}") }
+                )
+            }
+            composable(
+                "cat/{id}/{p}/{off}/{cur}",
+                arguments = listOf(
+                    navArgument("id") { type = NavType.StringType }, navArgument("p") { type = NavType.StringType },
+                    navArgument("off") { type = NavType.IntType }, navArgument("cur") { type = NavType.StringType }
+                )
+            ) {
+                val a = it.arguments!!
+                CategoryScreen(
+                    categoryId = a.getString("id")!!,
+                    initialType = PeriodType.valueOf(a.getString("p")!!),
+                    initialOffset = a.getInt("off"),
+                    initialCur = a.getString("cur")!!.takeIf { c -> c != "ALL" },
+                    onBack = { nav.popBackStack() },
+                    onEdit = { id -> nav.navigate("edit/$id") }
+                )
+            }
+            composable("import") { ImportScreen(onBack = { nav.popBackStack() }) }
             composable("ops") { OperationsScreen(onEdit = { id -> nav.navigate("edit/$id") }) }
             composable("scan") { ScanScreen() }
             composable("accounts") { AccountsScreen() }
-            composable("more") { MoreScreen() }
+            composable("more") { MoreScreen(onImport = { nav.navigate("import") }) }
             composable("add/{type}", arguments = listOf(navArgument("type") { type = NavType.StringType })) {
                 AddScreen(initialType = it.arguments?.getString("type") ?: "EXPENSE", editId = null, onDone = { nav.popBackStack() })
             }

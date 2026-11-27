@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Интернет: только курсы валют (позже — Google Таблица и сканер чеков) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:name=".MonetaApp"
         android:allowBackup="false"
